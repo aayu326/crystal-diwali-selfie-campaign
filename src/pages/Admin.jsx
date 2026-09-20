@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import JSZip from 'jszip';
 import { fetchAdminData, subscribeToRealtimeUpdates } from '../services/supabase.js';
 import { getStateOptions, getStateLabel } from '../data/indiaLocations.js';
 import { LANGUAGES, t } from '../data/translations.js';
@@ -38,6 +39,61 @@ function downloadCsv(rows) {
   a.download = `crystal-diwali-registrations-${Date.now()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+async function downloadGeneratedImages(portraits, setProgress) {
+  const images = portraits.filter((p) => p.generated_image_url);
+
+  if (!images.length) {
+    alert('No generated images available to export.');
+    return;
+  }
+
+  const zip = new JSZip();
+  const folder = zip.folder('generated');
+
+  try {
+    for (let i = 0; i < images.length; i++) {
+      const portrait = images[i];
+
+      setProgress(`Downloading ${i + 1} / ${images.length}`);
+
+      const response = await fetch(portrait.generated_image_url);
+
+      if (!response.ok) {
+        throw new Error(`Failed to download image ${i + 1}`);
+      }
+
+      const blob = await response.blob();
+
+      const refNo = portrait.ref_no || `portrait-${i + 1}`;
+      folder.file(`${refNo}.jpg`, blob);
+    }
+
+    setProgress('Creating ZIP...');
+
+    const zipBlob = await zip.generateAsync({
+      type: 'blob',
+      compression: 'STORE',
+    });
+
+    const url = URL.createObjectURL(zipBlob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `crystal-diwali-generated-images-${Date.now()}.zip`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+
+    setProgress('');
+  } catch (error) {
+    console.error('Generated image export failed:', error);
+    setProgress('');
+    alert('Export failed. Please try again.');
+  }
 }
 async function downloadPortrait(imageUrl, refNo, name) {
   if (!imageUrl) return;
@@ -89,6 +145,8 @@ export default function Admin() {
   const [registrations, setRegistrations] = useState([]);
   const [portraits, setPortraits] = useState([]);
   const [isMock, setIsMock] = useState(false);
+  const [exportingImages, setExportingImages] = useState(false);
+const [exportProgress, setExportProgress] = useState('');
 
   const [search, setSearch] = useState('');
   const [stateFilter, setStateFilter] = useState('');
@@ -289,6 +347,25 @@ export default function Admin() {
         <button type="button" className="secondary-btn" onClick={() => downloadCsv(filtered)}>
           {tr('exportCsv')}
         </button>
+        <button
+  type="button"
+  className="secondary-btn"
+  disabled={exportingImages}
+  onClick={async () => {
+    setExportingImages(true);
+
+    try {
+      await downloadGeneratedImages(
+        portraits,
+        setExportProgress
+      );
+    } finally {
+      setExportingImages(false);
+    }
+  }}
+>
+  {exportingImages ? exportProgress || 'Exporting...' : 'Export Generated Images'}
+</button>
       </section>
 
       <section className="admin-table-wrap">

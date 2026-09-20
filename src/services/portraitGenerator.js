@@ -447,6 +447,6 @@ export async function generatePortraitBlob({ img, transform, name, districtState
     districtState,
     lang,
   });
-  const blob = await canvasToBlob(canvas, 'image/png', 0.95);
+  const blob = await canvasToBlob(canvas, 'image/jpeg', 0.88);
   return { blob, canvas };
 }

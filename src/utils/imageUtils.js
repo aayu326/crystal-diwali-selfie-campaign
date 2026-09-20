@@ -106,3 +106,42 @@ export function truncate(str, max) {
   if (!str) return '';
   return str.length > max ? `${str.slice(0, max - 1)}…` : str;
 }
+export async function compressImage(
+  file,
+  {
+    maxWidth = 1280,
+    maxHeight = 1280,
+    quality = 0.82,
+    type = 'image/jpeg',
+  } = {}
+) {
+  const img = await loadImage(await fileToDataUrl(file));
+
+  const scale = Math.min(
+    1,
+    maxWidth / img.width,
+    maxHeight / img.height
+  );
+
+  const width = Math.round(img.width * scale);
+  const height = Math.round(img.height * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, width, height);
+
+  const blob = await canvasToBlob(canvas, type, quality);
+
+  if (!blob) {
+    throw new Error('IMAGE_COMPRESSION_FAILED');
+  }
+
+  return new File(
+    [blob],
+    `selfie-${Date.now()}.jpg`,
+    { type }
+  );
+}

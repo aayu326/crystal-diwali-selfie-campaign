@@ -9,7 +9,11 @@ import ResultModal from '../components/ResultModal.jsx';
 import { t } from '../data/translations.js';
 import { getStateLabel } from '../data/indiaLocations.js';
 import { validateForm, isFormValid } from '../utils/validation.js';
-import { loadImage, fileToDataUrl } from '../utils/imageUtils.js';
+import {
+  loadImage,
+  fileToDataUrl,
+  compressImage,
+} from '../utils/imageUtils.js';
 import { generatePortraitBlob } from '../services/portraitGenerator.js';
 import { generateReferenceNumber } from '../services/referenceNumber.js';
 import { saveRegistration, savePortrait, uploadOriginalPhoto, uploadGeneratedPortrait } from '../services/supabase.js';
@@ -38,18 +42,27 @@ export default function Home() {
   const tr = (key) => t(lang, key);
   const districtState = values.district && values.state ? `${values.district}, ${getStateLabel(values.state, lang)}` : '';
 
-  const handlePhotoSelected = async (file) => {
-    setPhotoError('');
-    try {
-      const dataUrl = await fileToDataUrl(file);
-      const img = await loadImage(dataUrl);
-      setPhotoFile(file);
-      setPhotoImg(img);
-      setTransform({ ...DEFAULT_TRANSFORM });
-    } catch {
-      setPhotoError(tr('errGenerate'));
-    }
-  };
+const handlePhotoSelected = async (file) => {
+  setPhotoError('');
+
+  try {
+    const compressedFile = await compressImage(file, {
+      maxWidth: 1280,
+      maxHeight: 1280,
+      quality: 0.82,
+      type: 'image/jpeg',
+    });
+
+    const dataUrl = await fileToDataUrl(compressedFile);
+    const img = await loadImage(dataUrl);
+
+    setPhotoFile(compressedFile);
+    setPhotoImg(img);
+    setTransform({ ...DEFAULT_TRANSFORM });
+  } catch {
+    setPhotoError(tr('errGenerate'));
+  }
+};
 
   const handleRetake = () => {
     setPhotoImg(null);
@@ -106,7 +119,10 @@ const { id } = await saveRegistration({
 });
         registrationId = id;
 
-        const generatedImageUrl = await uploadGeneratedPortrait(portraitBlob, `${refNo}.png`);
+const generatedImageUrl = await uploadGeneratedPortrait(
+  portraitBlob,
+  `${refNo}.jpg`
+);
 
         await savePortrait({
           registration_id: registrationId,
