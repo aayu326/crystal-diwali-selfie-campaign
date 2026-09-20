@@ -1,19 +1,26 @@
 :root {
-  --green-950: #071c11;
-  --green-900: #0b2e1b;
-  --green-800: #0f3d24;
-  --green-700: #14502f;
-  --gold-500: #f2c14e;
-  --gold-600: #d9a627;
-  --cream-50: #fbf8f1;
-  --cream-100: #f4f1e9;
-  --red-600: #c0392b;
-  --red-700: #a5311f;
-  --ink-900: #16211a;
-  --shadow-soft: 0 20px 45px rgba(4, 20, 12, 0.35);
+  --green-950: #1B0B12;
+  --green-900: #1B0B12;
+  --green-800: #2A101B;
+  --green-700: #351522;
+
+  --gold-500: #F0C69A;
+  --gold-600: #D9A06C;
+
+  --cream-50: #FFF7EE;
+  --cream-100: #F3E3D8;
+
+  --red-600: #A63D4A;
+  --red-700: #7E2935;
+
+  --ink-900: #21151A;
+
+  --shadow-soft: 0 20px 45px rgba(0, 0, 0, 0.42);
+
   --radius-lg: 22px;
   --radius-md: 14px;
   --radius-sm: 9px;
+
   font-synthesis: none;
 }
 
@@ -61,11 +68,16 @@ img {
 }
 
 .page {
-  min-height: 100vh;
+  flex: 1;
   background:
-    radial-gradient(circle at 8% 12%, rgba(242, 193, 78, 0.08), transparent 40%),
-    radial-gradient(circle at 92% 85%, rgba(242, 193, 78, 0.06), transparent 45%),
-    linear-gradient(160deg, var(--green-900) 0%, var(--green-950) 60%, #051209 100%);
+    radial-gradient(circle at 8% 12%, rgba(217, 160, 108, 0.10), transparent 40%),
+    radial-gradient(circle at 92% 85%, rgba(240, 198, 154, 0.08), transparent 45%),
+    linear-gradient(
+      160deg,
+      #351522 0%,
+      #1B0B12 55%,
+      #10070C 100%
+    );
   display: flex;
   flex-direction: column;
 }
@@ -168,8 +180,8 @@ img {
 /* ---------------- Portrait card ---------------- */
 
 .portrait-card {
-  background: rgba(6, 26, 16, 0.55);
-  border: 1px solid rgba(242, 193, 78, 0.25);
+  background: rgba(53, 21, 34, 0.65);
+  border: 1px solid rgba(217, 160, 108, 0.35);
   border-radius: var(--radius-lg);
   padding: clamp(16px, 2.4vw, 26px);
   max-width: 420px;
@@ -290,7 +302,7 @@ img {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 1px solid rgba(242, 193, 78, 0.4);
+border: 1px solid rgba(217, 160, 108, 0.4);
   background: rgba(255, 255, 255, 0.06);
   color: var(--cream-50);
   font-size: 17px;
@@ -498,7 +510,7 @@ img {
   padding: 15px;
   font-weight: 800;
   font-size: 15.5px;
-  box-shadow: 0 10px 24px rgba(192, 57, 43, 0.35);
+  box-shadow: 0 10px 24px rgba(166, 61, 74, 0.35);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -575,7 +587,7 @@ img {
 
 .modal-panel {
   background: var(--green-900);
-  border: 1px solid rgba(242, 193, 78, 0.25);
+  border: 1px solid rgba(217, 160, 108, 0.30);
   border-radius: var(--radius-lg);
   padding: clamp(20px, 4vw, 34px);
   max-width: 420px;
@@ -626,7 +638,7 @@ img {
 .modal-image-frame {
   border-radius: var(--radius-md);
   overflow: hidden;
-  border: 1px solid rgba(242, 193, 78, 0.3);
+  border: 1px solid rgba(217, 160, 108, 0.30);
   margin-bottom: 10px;
 }
 
