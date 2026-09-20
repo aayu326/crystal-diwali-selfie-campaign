@@ -28,7 +28,9 @@ const INITIAL_FORM = {
 };
 
 export default function Home() {
-  const [lang, setLang] = useState('mr');
+
+  const [lang, setLang] = useState('en');
+
   const [values, setValues] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [photoImg, setPhotoImg] = useState(null); // HTMLImageElement

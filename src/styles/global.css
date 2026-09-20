@@ -956,3 +956,65 @@ border: 1px solid rgba(217, 160, 108, 0.4);
 .download-btn:active {
   transform: scale(0.98);
 }
+.language-switcher {
+  position: relative;
+  display: inline-block;
+}
+
+.lang-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fbf8f1;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.lang-dropdown-chevron {
+  transition: transform 0.15s ease;
+}
+.lang-dropdown-chevron.open {
+  transform: rotate(180deg);
+}
+
+.lang-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 160px;
+  background: #fbf8f1;
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  list-style: none;
+  margin: 0;
+  z-index: 40;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.lang-dropdown-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1c1c1c;
+  cursor: pointer;
+}
+
+.lang-dropdown-item:hover {
+  background: rgba(192, 57, 43, 0.08);
+}
+
+.lang-dropdown-item.active {
+  background: #f2c14e;
+  font-weight: 700;
+}

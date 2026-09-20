@@ -4,9 +4,77 @@ import { t } from '../data/translations.js';
 export const TEMPLATE_WIDTH = 1200;
 export const TEMPLATE_HEIGHT = 1500;
 
-// Font stacks include Devanagari fallbacks so Marathi/Hindi never falls back to a system font.
-const SANS = `Manrope, 'Noto Sans Devanagari', sans-serif`;
-const SERIF = `Fraunces, 'Noto Serif Devanagari', serif`;
+// ---------------------------------------------------------------------------
+// Per-language font stacks.
+//
+// Manrope/Fraunces (the brand's Latin fonts) are always listed first so Latin
+// glyphs (brand names, numerals, punctuation) keep the existing look. Each
+// language then falls back to the correct Noto family for its script, so the
+// generated poster never shows tofu boxes / missing-glyph squares no matter
+// which of the 9 languages is selected.
+//
+// IMPORTANT: these are *font-family* names only. The actual font files must
+// be loaded on the page (e.g. via a Google Fonts <link> in index.html) before
+// they can be used on the canvas — see ensureFonts() below, which uses the
+// Font Loading API to make sure each family is ready before drawing.
+// ---------------------------------------------------------------------------
+const FONT_STACKS = {
+  en: {
+    sans: `Manrope, sans-serif`,
+    serif: `Fraunces, serif`,
+  },
+  hi: {
+    sans: `Manrope, 'Noto Sans Devanagari', sans-serif`,
+    serif: `Fraunces, 'Noto Serif Devanagari', sans-serif`,
+  },
+  mr: {
+    sans: `Manrope, 'Noto Sans Devanagari', sans-serif`,
+    serif: `Fraunces, 'Noto Serif Devanagari', sans-serif`,
+  },
+  pa: {
+    sans: `Manrope, 'Noto Sans Gurmukhi', sans-serif`,
+    serif: `Fraunces, 'Noto Serif Gurmukhi', 'Noto Sans Gurmukhi', sans-serif`,
+  },
+  gu: {
+    sans: `Manrope, 'Noto Sans Gujarati', sans-serif`,
+    serif: `Fraunces, 'Noto Serif Gujarati', sans-serif`,
+  },
+  ta: {
+    sans: `Manrope, 'Noto Sans Tamil', sans-serif`,
+    serif: `Fraunces, 'Noto Serif Tamil', sans-serif`,
+  },
+  te: {
+    sans: `Manrope, 'Noto Sans Telugu', sans-serif`,
+    serif: `Fraunces, 'Noto Serif Telugu', sans-serif`,
+  },
+  kn: {
+    sans: `Manrope, 'Noto Sans Kannada', sans-serif`,
+    serif: `Fraunces, 'Noto Serif Kannada', sans-serif`,
+  },
+  ml: {
+    sans: `Manrope, 'Noto Sans Malayalam', sans-serif`,
+    serif: `Fraunces, 'Noto Serif Malayalam', sans-serif`,
+  },
+};
+
+// A short sample string per script, used to force-load that script's font
+// (document.fonts.load needs at least one glyph from the target font to
+// actually resolve the fallback family it should fetch).
+const FONT_SAMPLES = {
+  en: 'Aa',
+  hi: 'दिवाळी Aa',
+  mr: 'दिवाळी Aa',
+  pa: 'ਦੀਵਾਲੀ Aa',
+  gu: 'દિવાળી Aa',
+  ta: 'தீபாவளி Aa',
+  te: 'దీపావళి Aa',
+  kn: 'ದೀಪಾವಳಿ Aa',
+  ml: 'ദീപാവലി Aa',
+};
+
+function getFontStack(lang) {
+  return FONT_STACKS[lang] || FONT_STACKS.en;
+}
 
 const COLORS = {
   gold: '#f2c14e',
@@ -27,18 +95,24 @@ export function getFrameGeometry(width = TEMPLATE_WIDTH, height = TEMPLATE_HEIGH
 
 /**
  * Canvas draws with whatever font is loaded at that moment. Call this (and
- * redraw) before the first render, otherwise the first export can use fallback fonts.
+ * redraw) before the first render, otherwise the first export can use fallback
+ * fonts. Pass the active `lang` so only the fonts actually needed are loaded.
  */
-export async function ensureFonts() {
+export async function ensureFonts(lang = 'en') {
   if (!document.fonts || !document.fonts.load) return;
-  const sample = 'दिवाळी Aa';
+  const sample = FONT_SAMPLES[lang] || FONT_SAMPLES.en;
+  const stack = getFontStack(lang);
   try {
     await Promise.all([
-      document.fonts.load('700 40px Manrope', sample),
-      document.fonts.load('500 20px Manrope', sample),
-      document.fonts.load('700 58px Fraunces', sample),
-      document.fonts.load('700 40px "Noto Serif Devanagari"', sample),
-      document.fonts.load('600 20px "Noto Sans Devanagari"', sample),
+      // Brand Latin fonts (always needed: header pill, JIVORA®, numerals, etc.)
+      document.fonts.load('700 40px Manrope', 'Aa'),
+      document.fonts.load('500 20px Manrope', 'Aa'),
+      document.fonts.load('700 58px Fraunces', 'Aa'),
+      // Localized sans/serif for the active language's script.
+      document.fonts.load(`700 40px ${stack.sans}`, sample),
+      document.fonts.load(`600 20px ${stack.sans}`, sample),
+      document.fonts.load(`700 58px ${stack.serif}`, sample),
+      document.fonts.load(`500 24px ${stack.sans}`, sample),
     ]);
   } catch {
     /* ignore – fall back to stack */
@@ -153,6 +227,8 @@ function drawMarigoldGarland(ctx, w) {
   }
 }
 
+// Brand header text (CRYSTAL / Inspiring Growth) is always Latin, so it keeps
+// using the plain Manrope stack regardless of the active language.
 function drawBrandHeader(ctx, w, h) {
   const pillW = w * 0.34;
   const pillH = h * 0.056;
@@ -165,10 +241,10 @@ function drawBrandHeader(ctx, w, h) {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `800 ${scaleFont(40, w)}px ${SANS}`;
+  ctx.font = `800 ${scaleFont(40, w)}px Manrope, sans-serif`;
   ctx.fillStyle = COLORS.red;
   ctx.fillText('CRYSTAL', w / 2, pillY + pillH * 0.4);
-  ctx.font = `600 ${scaleFont(15, w)}px ${SANS}`;
+  ctx.font = `600 ${scaleFont(15, w)}px Manrope, sans-serif`;
   ctx.fillStyle = COLORS.green;
   ctx.fillText('Inspiring Growth', w / 2, pillY + pillH * 0.79);
   ctx.restore();
@@ -176,24 +252,25 @@ function drawBrandHeader(ctx, w, h) {
 
 /** "From Crystal family" label + headline, wrapped onto max 2 lines so nothing is clipped. */
 function drawHeadline(ctx, w, h, lang) {
+  const { sans, serif } = getFontStack(lang);
   const maxW = w * 0.84;
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
 
   ctx.fillStyle = COLORS.gold;
-  fitFont(ctx, t(lang, 'fromCrystal'), maxW, 28, 600, SANS, w);
+  fitFont(ctx, t(lang, 'fromCrystal'), maxW, 28, 600, sans, w);
   ctx.fillText(t(lang, 'fromCrystal'), w / 2, h * 0.163);
 
   ctx.fillStyle = '#fdfaf3';
   const text = t(lang, 'diwaliWish');
   let size = scaleFont(60, w);
-  ctx.font = `700 ${size}px ${SERIF}`;
+  ctx.font = `700 ${size}px ${serif}`;
   let lines = wrapLines(ctx, text, maxW);
   // If it needs more than 2 lines, shrink until it fits.
   while (lines.length > 2 && size > scaleFont(38, w)) {
     size -= 2;
-    ctx.font = `700 ${size}px ${SERIF}`;
+    ctx.font = `700 ${size}px ${serif}`;
     lines = wrapLines(ctx, text, maxW);
   }
   const lineH = size * 1.22;
@@ -308,7 +385,11 @@ function drawEmptyFramePlaceholder(ctx, frame, w) {
   ctx.restore();
 }
 
-function drawNameBadge(ctx, frame, w, name, districtState) {
+// Name badge draws the user-entered name and district/state, both of which
+// may be typed in the active language's script — so it now takes `lang` and
+// uses that language's sans stack instead of a hardcoded font.
+function drawNameBadge(ctx, frame, w, name, districtState, lang) {
+  const { sans } = getFontStack(lang);
   const hasSub = Boolean(districtState);
   const badgeW = frame.width * 0.78;
   const badgeH = w * (hasSub ? 0.088 : 0.062);
@@ -330,19 +411,20 @@ function drawNameBadge(ctx, frame, w, name, districtState) {
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffffff';
   const nameText = truncate(name || '', 22);
-  fitFont(ctx, nameText, innerW, 30, 700, SANS, w);
+  fitFont(ctx, nameText, innerW, 30, 700, sans, w);
   ctx.fillText(nameText, frame.cx, badgeY + badgeH * (hasSub ? 0.36 : 0.5));
 
   if (hasSub) {
     const subText = truncate(districtState, 34);
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    fitFont(ctx, subText, innerW, 20, 500, SANS, w);
+    fitFont(ctx, subText, innerW, 20, 500, sans, w);
     ctx.fillText(subText, frame.cx, badgeY + badgeH * 0.72);
   }
   ctx.restore();
 }
 
 function drawFooterBanner(ctx, w, h, lang) {
+  const { sans } = getFontStack(lang);
   const bannerH = h * 0.16;
   const bannerY = h - bannerH;
 
@@ -364,7 +446,7 @@ function drawFooterBanner(ctx, w, h, lang) {
   const pillW = w * 0.2;
   const pillH = bannerH * 0.26;
 
-  // Product pill
+  // Product pill – brand name JIVORA® stays Latin/Manrope regardless of lang.
   ctx.save();
   ctx.fillStyle = COLORS.red;
   roundedRect(ctx, padX, rowOneY - pillH / 2, pillW, pillH, pillH / 2);
@@ -372,35 +454,39 @@ function drawFooterBanner(ctx, w, h, lang) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffffff';
-  ctx.font = `800 ${scaleFont(24, w)}px ${SANS}`;
+  ctx.font = `800 ${scaleFont(24, w)}px Manrope, sans-serif`;
   ctx.fillText('JIVORA®', padX + pillW / 2, rowOneY + 1);
   ctx.restore();
 
-  // Tagline – fitted to the space right of the pill
+  // Tagline – localized text, fitted to the space right of the pill.
   ctx.save();
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = COLORS.ink;
   const taglineX = padX + pillW + w * 0.025;
   const tagline = t(lang, 'jivoraTagline');
-  fitFont(ctx, tagline, w - padX - taglineX, 24, 500, SANS, w);
+  fitFont(ctx, tagline, w - padX - taglineX, 24, 500, sans, w);
   ctx.fillText(tagline, taglineX, rowOneY + 1);
   ctx.restore();
 
-  // Second row: brand line (left) + hashtag (right), each gets its own width budget
+  // Second row: brand line (left, kept as fixed transliteration) + hashtag
+  // (right, always Latin) — each gets its own width budget.
   const hashtag = t(lang, 'hashtag');
   ctx.save();
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'right';
   ctx.fillStyle = COLORS.red;
-  const hashSize = fitFont(ctx, hashtag, contentW * 0.32, 21, 700, SANS, w);
+  const hashSize = fitFont(ctx, hashtag, contentW * 0.32, 21, 700, `Manrope, sans-serif`, w);
   const hashW = ctx.measureText(hashtag).width;
   ctx.fillText(hashtag, w - padX, rowTwoY);
 
   ctx.textAlign = 'left';
   ctx.fillStyle = COLORS.green;
   const brand = t(lang, 'brandLine');
-  fitFont(ctx, brand, contentW - hashW - w * 0.03, Math.max(21, hashSize), 700, SANS, w);
+  // brandLine is stored in Devanagari across all languages (a fixed
+  // transliterated tagline, not translated per-language), so it always needs
+  // the Devanagari-aware sans stack to render, regardless of the active lang.
+  fitFont(ctx, brand, contentW - hashW - w * 0.03, Math.max(21, hashSize), 700, `Manrope, 'Noto Sans Devanagari', sans-serif`, w);
   ctx.fillText(brand, padX, rowTwoY);
   ctx.restore();
 }
@@ -426,14 +512,14 @@ export function drawPortrait(ctx, { width, height, img, transform, name, distric
   drawDiyas(ctx, frame, width, height);
 
   if (name || districtState) {
-    drawNameBadge(ctx, frame, width, name, districtState);
+    drawNameBadge(ctx, frame, width, name, districtState, lang);
   }
 
   drawFooterBanner(ctx, width, height, lang);
 }
 
 export async function generatePortraitBlob({ img, transform, name, districtState, lang }) {
-  await ensureFonts();
+  await ensureFonts(lang);
   const canvas = document.createElement('canvas');
   canvas.width = TEMPLATE_WIDTH;
   canvas.height = TEMPLATE_HEIGHT;
