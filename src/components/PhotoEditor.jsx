@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { drawPortrait, TEMPLATE_WIDTH, TEMPLATE_HEIGHT } from '../services/portraitGenerator.js';
+import {
+  drawPortrait,
+  TEMPLATE_WIDTH,
+  TEMPLATE_HEIGHT,
+} from '../services/portraitGenerator.js';
 import { clamp } from '../utils/imageUtils.js';
 import { t } from '../data/translations.js';
 
@@ -7,11 +11,18 @@ const MIN_SCALE = 0.6;
 const MAX_SCALE = 4;
 const ZOOM_STEP = 0.15;
 
-export const DEFAULT_TRANSFORM = { x: 0, y: 0, scale: 1, rotation: 0 };
+export const DEFAULT_TRANSFORM = {
+  x: 0,
+  y: 0,
+  scale: 1,
+  rotation: 0,
+};
 
-function distance(touches) {
-  const [a, b] = touches;
-  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+function distance(a, b) {
+  return Math.hypot(
+    a.clientX - b.clientX,
+    a.clientY - b.clientY
+  );
 }
 
 export default function PhotoEditor({
@@ -25,100 +36,390 @@ export default function PhotoEditor({
   displayWidth = 340,
 }) {
   const canvasRef = useRef(null);
-  const dragState = useRef(null);
-  const pinchState = useRef(null);
+
+  // Current transform used for smooth preview rendering.
+  const transformRef = useRef(transform);
+
+  // Drag / pinch state.
+  const pointersRef = useRef(new Map());
+  const gestureRef = useRef(null);
+
+  // requestAnimationFrame handle.
+  const rafRef = useRef(null);
+
   const [isDragging, setIsDragging] = useState(false);
 
-  const displayHeight = Math.round((displayWidth * TEMPLATE_HEIGHT) / TEMPLATE_WIDTH);
+  const displayHeight = Math.round(
+    (displayWidth * TEMPLATE_HEIGHT) / TEMPLATE_WIDTH
+  );
+
   const toTemplateScale = TEMPLATE_WIDTH / displayWidth;
 
-  const redraw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    drawPortrait(ctx, {
-      width: canvas.width,
-      height: canvas.height,
-      img,
-      transform,
-      name,
-      districtState,
-      lang,
-    });
-  }, [img, transform, name, districtState, lang]);
-
+  /*
+   * Keep ref synchronized with React state.
+   * React state is still the source of truth outside gestures.
+   */
   useEffect(() => {
-    redraw();
-  }, [redraw]);
+    transformRef.current = transform;
+  }, [transform]);
 
-  const updateTransform = (partial) => {
-    onTransformChange((prev) => {
-      const next = { ...prev, ...partial };
-      next.scale = clamp(next.scale, MIN_SCALE, MAX_SCALE);
-      next.x = clamp(next.x, -TEMPLATE_WIDTH * 0.5, TEMPLATE_WIDTH * 0.5);
-      next.y = clamp(next.y, -TEMPLATE_HEIGHT * 0.5, TEMPLATE_HEIGHT * 0.5);
-      return next;
-    });
-  };
+  /*
+   * Draw the portrait using the supplied transform.
+   */
+  const drawWithTransform = useCallback(
+    (nextTransform) => {
+      const canvas = canvasRef.current;
+
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) return;
+
+      drawPortrait(ctx, {
+        width: canvas.width,
+        height: canvas.height,
+        img,
+        transform: nextTransform,
+        name,
+        districtState,
+        lang,
+      });
+    },
+    [img, name, districtState, lang]
+  );
+
+  /*
+   * Schedule only one canvas redraw per animation frame.
+   */
+  const scheduleDraw = useCallback(
+    (nextTransform) => {
+      transformRef.current = nextTransform;
+
+      if (rafRef.current !== null) {
+        return;
+      }
+
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        drawWithTransform(transformRef.current);
+      });
+    },
+    [drawWithTransform]
+  );
+
+  /*
+   * Cancel pending animation frame on unmount.
+   */
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, []);
+
+  /*
+   * Initial / external redraw.
+   */
+  useEffect(() => {
+    transformRef.current = transform;
+    drawWithTransform(transform);
+  }, [transform, drawWithTransform]);
+
+  /*
+   * Keep transform values inside safe limits.
+   */
+  const normalizeTransform = useCallback((next) => {
+    return {
+      ...next,
+      scale: clamp(next.scale, MIN_SCALE, MAX_SCALE),
+      x: clamp(
+        next.x,
+        -TEMPLATE_WIDTH * 0.5,
+        TEMPLATE_WIDTH * 0.5
+      ),
+      y: clamp(
+        next.y,
+        -TEMPLATE_HEIGHT * 0.5,
+        TEMPLATE_HEIGHT * 0.5
+      ),
+    };
+  }, []);
+
+  /*
+   * Commit a transform to React state.
+   * Used for buttons, slider and when a gesture finishes.
+   */
+  const commitTransform = useCallback(
+    (next) => {
+      const normalized = normalizeTransform(next);
+
+      transformRef.current = normalized;
+
+      onTransformChange(() => normalized);
+    },
+    [normalizeTransform, onTransformChange]
+  );
+
+  /*
+   * Update only the local preview during dragging.
+   */
+  const previewTransform = useCallback(
+    (partial) => {
+      const next = normalizeTransform({
+        ...transformRef.current,
+        ...partial,
+      });
+
+      scheduleDraw(next);
+    },
+    [normalizeTransform, scheduleDraw]
+  );
+
+  /*
+   * Finish gesture and send final transform to React.
+   */
+  const finishGesture = useCallback(() => {
+    const finalTransform = transformRef.current;
+
+    if (gestureRef.current) {
+      gestureRef.current = null;
+    }
+
+    pointersRef.current.clear();
+
+    setIsDragging(false);
+
+    commitTransform(finalTransform);
+  }, [commitTransform]);
+
+  /*
+   * -------------------------
+   * Pointer events
+   * -------------------------
+   *
+   * Pointer events work for:
+   * - mouse
+   * - trackpad
+   * - touchscreen
+   *
+   * This means we don't need separate touch handlers.
+   */
 
   const handlePointerDown = (e) => {
     if (!img) return;
-    canvasRef.current.setPointerCapture(e.pointerId);
-    dragState.current = { startX: e.clientX, startY: e.clientY, origin: { x: transform.x, y: transform.y } };
+
+    const canvas = canvasRef.current;
+
+    if (!canvas) return;
+
+    canvas.setPointerCapture(e.pointerId);
+
+    pointersRef.current.set(e.pointerId, {
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
+
+    const pointers = Array.from(pointersRef.current.values());
+
+    /*
+     * Two pointers = pinch zoom.
+     */
+    if (pointers.length === 2) {
+      const startDistance = distance(
+        pointers[0],
+        pointers[1]
+      );
+
+      gestureRef.current = {
+        type: 'pinch',
+        startDistance,
+        startScale: transformRef.current.scale,
+      };
+
+      setIsDragging(true);
+      return;
+    }
+
+    /*
+     * One pointer = drag.
+     */
+    gestureRef.current = {
+      type: 'drag',
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: transformRef.current.x,
+      originY: transformRef.current.y,
+    };
+
     setIsDragging(true);
   };
 
   const handlePointerMove = (e) => {
-    if (!dragState.current) return;
-    const dx = (e.clientX - dragState.current.startX) * toTemplateScale;
-    const dy = (e.clientY - dragState.current.startY) * toTemplateScale;
-    updateTransform({ x: dragState.current.origin.x + dx, y: dragState.current.origin.y + dy });
+    if (!img) return;
+
+    if (!pointersRef.current.has(e.pointerId)) {
+      return;
+    }
+
+    pointersRef.current.set(e.pointerId, {
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
+
+    const gesture = gestureRef.current;
+
+    if (!gesture) return;
+
+    /*
+     * Pinch zoom.
+     */
+    if (gesture.type === 'pinch') {
+      const pointers = Array.from(
+        pointersRef.current.values()
+      );
+
+      if (pointers.length < 2) return;
+
+      const currentDistance = distance(
+        pointers[0],
+        pointers[1]
+      );
+
+      if (!gesture.startDistance) return;
+
+      const ratio =
+        currentDistance / gesture.startDistance;
+
+      previewTransform({
+        scale: gesture.startScale * ratio,
+      });
+
+      e.preventDefault();
+      return;
+    }
+
+    /*
+     * Single pointer drag.
+     */
+    if (gesture.type === 'drag') {
+      const dx =
+        (e.clientX - gesture.startX) *
+        toTemplateScale;
+
+      const dy =
+        (e.clientY - gesture.startY) *
+        toTemplateScale;
+
+      previewTransform({
+        x: gesture.originX + dx,
+        y: gesture.originY + dy,
+      });
+
+      e.preventDefault();
+    }
   };
 
-  const endDrag = () => {
-    dragState.current = null;
-    setIsDragging(false);
+  const handlePointerUp = (e) => {
+    pointersRef.current.delete(e.pointerId);
+
+    /*
+     * If one finger remains after a pinch,
+     * switch back to drag from the current position.
+     */
+    const remaining = Array.from(
+      pointersRef.current.values()
+    );
+
+    if (remaining.length === 1) {
+      const pointer = remaining[0];
+
+      gestureRef.current = {
+        type: 'drag',
+        startX: pointer.clientX,
+        startY: pointer.clientY,
+        originX: transformRef.current.x,
+        originY: transformRef.current.y,
+      };
+
+      return;
+    }
+
+    /*
+     * No pointers remaining.
+     */
+    if (remaining.length === 0) {
+      finishGesture();
+    }
   };
+
+  const handlePointerCancel = () => {
+    finishGesture();
+  };
+
+  /*
+   * -------------------------
+   * Mouse / trackpad wheel
+   * -------------------------
+   */
 
   const handleWheel = (e) => {
     if (!img) return;
+
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -ZOOM_STEP / 3 : ZOOM_STEP / 3;
-    updateTransform({ scale: transform.scale + delta });
+
+    const delta =
+      e.deltaY > 0
+        ? -ZOOM_STEP / 3
+        : ZOOM_STEP / 3;
+
+    commitTransform({
+      ...transformRef.current,
+      scale:
+        transformRef.current.scale + delta,
+    });
   };
 
-  // --- Touch (pinch to zoom + single-finger drag) ---
-  const handleTouchStart = (e) => {
-    if (!img) return;
-    if (e.touches.length === 2) {
-      pinchState.current = { startDist: distance(e.touches), startScale: transform.scale };
-    } else if (e.touches.length === 1) {
-      const touch = e.touches[0];
-      dragState.current = { startX: touch.clientX, startY: touch.clientY, origin: { x: transform.x, y: transform.y } };
-      setIsDragging(true);
-    }
+  /*
+   * -------------------------
+   * Buttons
+   * -------------------------
+   */
+
+  const zoomOut = () => {
+    commitTransform({
+      ...transformRef.current,
+      scale:
+        transformRef.current.scale - ZOOM_STEP,
+    });
   };
 
-  const handleTouchMove = (e) => {
-    if (e.touches.length === 2 && pinchState.current) {
-      e.preventDefault();
-      const newDist = distance(e.touches);
-      const ratio = newDist / pinchState.current.startDist;
-      updateTransform({ scale: pinchState.current.startScale * ratio });
-    } else if (e.touches.length === 1 && dragState.current) {
-      const touch = e.touches[0];
-      const dx = (touch.clientX - dragState.current.startX) * toTemplateScale;
-      const dy = (touch.clientY - dragState.current.startY) * toTemplateScale;
-      updateTransform({ x: dragState.current.origin.x + dx, y: dragState.current.origin.y + dy });
-    }
+  const zoomIn = () => {
+    commitTransform({
+      ...transformRef.current,
+      scale:
+        transformRef.current.scale + ZOOM_STEP,
+    });
   };
 
-  const handleTouchEnd = (e) => {
-    if (e.touches.length === 0) {
-      dragState.current = null;
-      pinchState.current = null;
-      setIsDragging(false);
-    }
+  const rotate = () => {
+    commitTransform({
+      ...transformRef.current,
+      rotation:
+        (transformRef.current.rotation + 90) % 360,
+    });
+  };
+
+  const reset = () => {
+    commitTransform(DEFAULT_TRANSFORM);
+  };
+
+  const handleSliderChange = (e) => {
+    commitTransform({
+      ...transformRef.current,
+      scale: parseFloat(e.target.value),
+    });
   };
 
   const tr = (key) => t(lang, key);
@@ -129,51 +430,82 @@ export default function PhotoEditor({
         ref={canvasRef}
         width={TEMPLATE_WIDTH}
         height={TEMPLATE_HEIGHT}
-        className={`portrait-canvas editable ${isDragging ? 'dragging' : ''}`}
-        style={{ width: displayWidth, height: displayHeight, touchAction: 'none' }}
+        className={`portrait-canvas editable ${
+          isDragging ? 'dragging' : ''
+        }`}
+        style={{
+          width: displayWidth,
+          height: displayHeight,
+          touchAction: 'none',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+        }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
-        onPointerUp={endDrag}
-        onPointerLeave={endDrag}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onWheel={handleWheel}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
       />
 
       {img && (
         <>
-          <p className="editor-hint">{tr('drag')}</p>
+          <p className="editor-hint">
+            {tr('drag')}
+          </p>
+
           <div className="editor-controls">
-            <button type="button" className="icon-btn" onClick={() => updateTransform({ scale: transform.scale - ZOOM_STEP })} aria-label={tr('zoom') + ' -'}>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={zoomOut}
+              aria-label={tr('zoom') + ' -'}
+            >
               −
             </button>
+
             <input
               type="range"
               min={MIN_SCALE}
               max={MAX_SCALE}
               step={0.01}
-              value={transform.scale}
-              onChange={(e) => updateTransform({ scale: parseFloat(e.target.value) })}
+              value={transformRef.current.scale}
+              onChange={handleSliderChange}
               aria-label={tr('zoom')}
             />
-            <button type="button" className="icon-btn" onClick={() => updateTransform({ scale: transform.scale + ZOOM_STEP })} aria-label={tr('zoom') + ' +'}>
-              +
-            </button>
+
             <button
               type="button"
               className="icon-btn"
-              onClick={() => updateTransform({ rotation: (transform.rotation + 90) % 360 })}
+              onClick={zoomIn}
+              aria-label={tr('zoom') + ' +'}
+            >
+              +
+            </button>
+
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={rotate}
               aria-label={tr('rotate')}
               title={tr('rotate')}
             >
               ↻
             </button>
-            <button type="button" className="text-btn" onClick={() => onTransformChange(() => ({ ...DEFAULT_TRANSFORM }))}>
+
+            <button
+              type="button"
+              className="text-btn"
+              onClick={reset}
+            >
               {tr('reset')}
             </button>
           </div>
-          <button type="button" className="link-btn" onClick={onRetake}>
+
+          <button
+            type="button"
+            className="link-btn"
+            onClick={onRetake}
+          >
             {tr('retake')}
           </button>
         </>
