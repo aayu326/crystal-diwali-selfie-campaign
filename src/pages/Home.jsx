@@ -46,6 +46,12 @@ const handlePhotoSelected = async (file) => {
   setPhotoError('');
 
   try {
+    console.log(
+      'RAW IMAGE SIZE:',
+      (file.size / 1024 / 1024).toFixed(2),
+      'MB'
+    );
+
     const compressedFile = await compressImage(file, {
       maxWidth: 1280,
       maxHeight: 1280,
@@ -53,13 +59,20 @@ const handlePhotoSelected = async (file) => {
       type: 'image/jpeg',
     });
 
+    console.log(
+      'COMPRESSED IMAGE SIZE:',
+      (compressedFile.size / 1024 / 1024).toFixed(2),
+      'MB'
+    );
+
     const dataUrl = await fileToDataUrl(compressedFile);
     const img = await loadImage(dataUrl);
 
     setPhotoFile(compressedFile);
     setPhotoImg(img);
     setTransform({ ...DEFAULT_TRANSFORM });
-  } catch {
+  } catch (error) {
+    console.error('Compression failed:', error);
     setPhotoError(tr('errGenerate'));
   }
 };
