@@ -4,7 +4,9 @@ import { t } from '../data/translations.js';
 export default function RegistrationForm({ lang, values, errors, onChange, onSubmit, submitting }) {
   const tr = (key) => t(lang, key);
   const stateOptions = getStateOptions(lang);
-  const districtOptions = values.state ? getDistrictOptions(values.state) : [];
+const districtOptions = values.state
+  ? getDistrictOptions(values.state, lang)
+  : [];
 
   const set = (field, value) => onChange({ ...values, [field]: value });
 
@@ -78,12 +80,11 @@ export default function RegistrationForm({ lang, values, errors, onChange, onSub
             disabled={!values.state}
             aria-invalid={!!errors.district}
           >
-            <option value="">{values.state ? tr('formDistrictPh2') : tr('formDistrictPh')}</option>
-            {districtOptions.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
+       {districtOptions.map((d) => (
+  <option key={d.code} value={d.code}>
+    {d.label}
+  </option>
+))}
           </select>
           {errors.district && <span className="field-error">{errors.district}</span>}
         </div>
